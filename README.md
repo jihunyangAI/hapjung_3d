@@ -27,6 +27,7 @@
 - 외벽 창문, 1층 상가 유리, 옥상 색, 옥탑, 가로수와 공원 나무는 규칙에 따라 그린 것으로, 실제 모습과는 다릅니다.
 - 야간 모드에서는 창문 일부에 불이 켜집니다.
 - 건물에 마우스를 올리면 이름, 주소, 층수가 나옵니다.
+- 건물 데이터는 저장소에 담겨 있어(`buildings_data.js`) 브이월드에 접속하지 않고도 열립니다. 최신 데이터로 갱신하려면 `node tools/build_buildings.js`를 실행합니다.
 - "높이 색상"을 켜면 층수에 따른 색으로 바뀝니다.
 
 ### 공통
@@ -62,10 +63,12 @@
 index.html          실사 3D 화면
 model.html          모형 버전 화면
 config.js           인증키와 환산값
+buildings_data.js   건물 윤곽·층수 데이터 (자동 생성, 모형 버전용)
 osm_data.js         도로·수계·녹지·역 데이터 (자동 생성)
 osm_raw.json        OpenStreetMap 원본 응답
 start.bat           Windows 실행 파일
 tools/build_osm.js  osm_raw.json → osm_data.js 변환
+tools/build_buildings.js  브이월드 건물 데이터 → buildings_data.js 저장
 tools/serve.js      로컬 정적 서버
 ```
 

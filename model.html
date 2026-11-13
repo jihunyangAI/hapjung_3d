@@ -100,6 +100,7 @@
 
 <script src="config.js"></script>
 <script src="osm_data.js"></script>
+<script src="buildings_data.js"></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -712,6 +713,18 @@ function refreshStats() {
 }
 
 async function loadBuildings() {
+  // 저장소에 담아 둔 건물 데이터가 있으면 브이월드에 접속하지 않고 그대로 쓴다.
+  const local = window.BUILDING_DATA && window.BUILDING_DATA.features;
+  if (local && local.length) {
+    for (let i = 0; i < local.length; i += 1000) {
+      setStatus('건물 세우는 중…<div class="bar"><i style="width:' + Math.round(i / local.length * 100) + '%"></i></div>');
+      await new Promise((r) => setTimeout(r, 30)); // 화면 갱신 틈
+      addBuildingBatch(local.slice(i, i + 1000));
+      refreshStats();
+    }
+    finishBuildings();
+    return;
+  }
   const dLon = R / MX, dLat = R / MZ;
   const box = [C0.lon - dLon, C0.lat - dLat, C0.lon + dLon, C0.lat + dLat].map((v) => v.toFixed(6)).join(',');
   const baseUrl = 'https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&format=json'
@@ -738,6 +751,9 @@ async function loadBuildings() {
     page++;
     await new Promise((r) => setTimeout(r, 30)); // 화면 갱신 틈
   }
+  finishBuildings();
+}
+function finishBuildings() {
   // 이름 있는 고층 건물 이름표
   const seen = new Set();
   tallNamed.sort((a, b) => b.floors - a.floors).forEach((it) => {
