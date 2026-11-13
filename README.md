@@ -2,15 +2,15 @@
 
 합정역 3번출구를 중심으로 반경 1km를 3D로 보여 주는 웹 페이지입니다. 설치 없이 브라우저에서 바로 열립니다.
 
-- 실사 3D: https://jihunyangai.github.io/hapjung_3d/
-- 모형 버전: https://jihunyangai.github.io/hapjung_3d/model.html
+- 모형 버전(첫 페이지): https://jihunyangai.github.io/hapjung_3d/
+- 실사 3D: https://jihunyangai.github.io/hapjung_3d/real.html
 
 ## 두 가지 화면
 
 | 화면 | 파일 | 내용 |
 | --- | --- | --- |
-| 실사 3D | `index.html` | 브이월드 3D 지도의 실제 외벽 사진이 입혀진 건물 모델 |
-| 모형 버전 | `model.html` | 건물 윤곽과 층수로 직접 세운 three.js 디오라마 |
+| 모형 버전 | `index.html` | 건물 윤곽과 층수로 직접 세운 three.js 디오라마 |
+| 실사 3D | `real.html` | 브이월드 3D 지도의 실제 외벽 사진이 입혀진 건물 모델 |
 
 두 화면의 안내판에 서로 넘어가는 버튼이 있습니다.
 
@@ -60,8 +60,9 @@
 ## 파일 구성
 
 ```
-index.html          실사 3D 화면
-model.html          모형 버전 화면
+index.html          모형 버전 화면 (첫 페이지)
+real.html           실사 3D 화면
+model.html          예전 주소용 이동 페이지
 config.js           인증키와 환산값
 buildings_data.js   건물 윤곽·층수 데이터 (자동 생성, 모형 버전용)
 osm_data.js         도로·수계·녹지·역 데이터 (자동 생성)

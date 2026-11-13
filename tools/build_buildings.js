@@ -1,6 +1,6 @@
 // 브이월드 건물 데이터(LT_C_SPBD)를 받아 buildings_data.js로 저장한다.
 // 사용: node tools/build_buildings.js
-// 모형 버전(model.html)은 이 파일이 있으면 브이월드에 접속하지 않고 바로 건물을 그린다.
+// 모형 버전(index.html)은 이 파일이 있으면 브이월드에 접속하지 않고 바로 건물을 그린다.
 const fs = require('fs');
 const path = require('path');
 
@@ -29,7 +29,7 @@ async function main() {
       const polys = f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates : [f.geometry.coordinates];
       const outer = polys[0] && polys[0][0];
       if (!outer || outer.length < 4) continue;
-      // model.html과 같은 기준: 외곽선 꼭짓점 평균 위치가 반경 안인 건물만
+      // index.html과 같은 기준: 외곽선 꼭짓점 평균 위치가 반경 안인 건물만
       let sx = 0, sz = 0;
       for (const c of outer) { sx += (c[0] - C0.lon) * MX; sz += (c[1] - C0.lat) * MZ; }
       if ((sx / outer.length) ** 2 + (sz / outer.length) ** 2 > R * R) continue;

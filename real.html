@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>합정역 3번출구 반경 1km 실사 3D</title>
+<style>
+  :root { --panel: rgba(255,255,255,.93); --ink: #1f2933; --sub: #5b6672; --line: #d9dee3; --accent: #d9382e; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1b2430; color: var(--ink);
+    font-family: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
+  #vmap { position: fixed; inset: 0; }
+  #panel { position: fixed; top: 16px; left: 16px; width: 280px; max-width: calc(100vw - 32px); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; backdrop-filter: blur(6px);
+    box-shadow: 0 6px 24px rgba(0,0,0,.25); font-size: 13px; line-height: 1.5; z-index: 1000; }
+  #panel h1 { font-size: 16px; margin: 0 0 2px; }
+  #panel .sub { color: var(--sub); margin: 0 0 10px; }
+  #status { margin: 8px 0; padding: 7px 9px; border-radius: 8px; background: rgba(120,140,160,.14); }
+  #status.err { background: rgba(217,56,46,.14); color: #b3261e; }
+  .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin: 8px 0; }
+  .toggles label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .btns { display: flex; gap: 6px; margin-top: 8px; }
+  button, a.btn { font: inherit; font-size: 12.5px; color: var(--ink); background: transparent; border: 1px solid var(--line);
+    border-radius: 8px; padding: 5px 8px; cursor: pointer; white-space: nowrap; flex: 1; text-align: center; text-decoration: none; }
+  button:hover, a.btn:hover { background: rgba(120,140,160,.16); }
+  .help { color: var(--sub); font-size: 12px; margin: 8px 0 0; }
+  @media (max-width: 560px) { #panel { width: auto; right: 16px; } .help { display: none; } }
+  #panel-close { position: absolute; top: 8px; right: 8px; flex: none; width: 26px; height: 26px; padding: 0; border: none; font-size: 15px; line-height: 1; color: var(--sub); }
+  #panel-open { position: fixed; top: 16px; left: 16px; z-index: 1000; display: none; flex: none; background: var(--panel); padding: 7px 11px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.2); backdrop-filter: blur(6px); }
+  body.panel-hidden #panel { display: none; }
+  body.panel-hidden #panel-open { display: block; }
+</style>
+</head>
+<body>
+<div id="vmap"></div>
+
+<button id="panel-open" title="안내판 보이기 (H)">☰ 안내판</button>
+<div id="panel">
+  <button id="panel-close" title="안내판 숨기기 (H)">✕</button>
+  <h1>합정역 3번출구 반경 1km</h1>
+  <p class="sub">브이월드 실사 3D 건물 모델</p>
+  <div id="status">3D 지도를 불러오는 중…</div>
+  <div class="toggles">
+    <label><input type="checkbox" id="t-ring" checked> 반경 1km 선</label>
+    <label><input type="checkbox" id="t-pin" checked> 3번출구 핀</label>
+    <label><input type="checkbox" id="t-poi" checked> 이름표</label>
+    <label><input type="checkbox" id="t-tree"> 가로수</label>
+    <label><input type="checkbox" id="t-spin"> 자동 회전</label>
+  </div>
+  <div class="btns">
+    <button id="b-home">처음 시점</button>
+    <button id="b-top">위에서 보기</button>
+    <button id="b-exit">3번출구로</button>
+  </div>
+  <div class="btns"><a class="btn" href="index.html">모형 버전 보기 (층수 색상·야간)</a></div>
+  <p class="help">드래그: 이동 · 휠: 확대/축소<br>가까이 갈수록 작은 건물까지 나타나고 외벽이 선명해집니다.</p>
+</div>
+
+<script src="config.js"></script>
+<script>
+  // 브이월드 3D 지도 로더. document.write 방식이라 이 위치에서 동기 로드해야 한다.
+  document.write('<script src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey='
+    + encodeURIComponent(window.APP_CONFIG.vworldKey) + '"><\/script>');
+</script>
+<script>
+(function () {
+  const CENTER = { lon: 126.915912, lat: 37.5507869 }; // 합정역 3번출구
+  const RADIUS = 1000;
+  const $ = (id) => document.getElementById(id);
+  const setStatus = (text, isErr) => { const el = $('status'); el.className = isErr ? 'err' : ''; el.textContent = text; };
+
+  // 시점: 중심을 바라보는 방위(도)·기울기(도)·거리(m)
+  const VIEWS = {
+    home: { heading: 0, pitch: -35, range: 1700 },
+    top: { heading: 0, pitch: -90, range: 2900 },
+    exit: { heading: 25, pitch: -40, range: 420 },
+  };
+  // 브이월드 초기 위치. 브이월드는 좌표를 '바라보는 지점'으로 해석하므로 중심을 그대로 넘기고,
+  // 정확한 시점은 초기 이동이 끝난 뒤 setup()에서 다시 맞춘다.
+  function cameraPositionFor(view) {
+    return new vw.CameraPosition(
+      new vw.CoordZ(CENTER.lon, CENTER.lat, view.range * Math.sin(-view.pitch * Math.PI / 180)),
+      new vw.Direction(view.heading, view.pitch, 0));
+  }
+
+  if (typeof vw === 'undefined' || window.vworldIsValid !== 'true') {
+    setStatus('브이월드 3D 지도를 불러오지 못했습니다. ' + (window.vworldErrMsg || '인터넷 연결과 인증키(만료일)를 확인해 주세요.'), true);
+    window.__ready = 'error';
+    return;
+  }
+
+  let viewer = null, target = null, ring = null, pin = [], spinOff = null;
+
+  function flyTo(view, seconds) {
+    stopSpin();
+    viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(target, 1), {
+      duration: seconds,
+      offset: new Cesium.HeadingPitchRange(Cesium.Math.toRadians(view.heading), Cesium.Math.toRadians(view.pitch), view.range),
+    });
+  }
+  function layerVisible(id, on) {
+    const el = map.getLayerElement(id);
+    if (!el) return;
+    if (on) el.show(); else el.hide();
+    viewer.scene.requestRender();
+  }
+  function stopSpin() {
+    if (!spinOff) return;
+    spinOff(); spinOff = null;
+    viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    $('t-spin').checked = false;
+  }
+  function startSpin() {
+    const cam = viewer.camera;
+    const s = { h: cam.heading, p: Math.min(cam.pitch, Cesium.Math.toRadians(-12)),
+      r: Math.min(Math.max(Cesium.Cartesian3.distance(cam.positionWC, target), 250), 4000) };
+    // 약 80초에 한 바퀴. 화면 갱신 주기에 맞춰 직접 돌린다.
+    let raf = 0, last = performance.now();
+    const step = (now) => {
+      s.h += (now - last) / 1000 * (Math.PI * 2 / 80);
+      last = now;
+      cam.lookAt(target, new Cesium.HeadingPitchRange(s.h, s.p, s.r));
+      viewer.scene.requestRender();
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    spinOff = () => cancelAnimationFrame(raf);
+  }
+
+  function setup() {
+    viewer = ws3d.viewer;
+    const ground = viewer.scene.globe.getHeight(Cesium.Cartographic.fromDegrees(CENTER.lon, CENTER.lat)) || 20;
+    target = Cesium.Cartesian3.fromDegrees(CENTER.lon, CENTER.lat, ground + 10);
+
+    // 반경 1km 선 (지면에 붙임)
+    const pts = [];
+    const mLat = 110574, mLon = 111320 * Math.cos(CENTER.lat * Math.PI / 180);
+    for (let i = 0; i <= 180; i++) {
+      const a = i / 180 * Math.PI * 2;
+      pts.push(CENTER.lon + Math.cos(a) * RADIUS / mLon, CENTER.lat + Math.sin(a) * RADIUS / mLat);
+    }
+    ring = viewer.entities.add({ polyline: {
+      positions: Cesium.Cartesian3.fromDegreesArray(pts), width: 4, clampToGround: true,
+      classificationType: Cesium.ClassificationType.TERRAIN,
+      material: Cesium.Color.fromCssColorString('#ff3b30'),
+    } });
+
+    // 3번출구 핀: 세로 막대 + 이름표
+    const top = ground + 95;
+    pin.push(viewer.entities.add({ polyline: {
+      positions: Cesium.Cartesian3.fromDegreesArrayHeights([CENTER.lon, CENTER.lat, ground, CENTER.lon, CENTER.lat, top]),
+      width: 3, material: Cesium.Color.fromCssColorString('#ff3b30'),
+    } }));
+    pin.push(viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(CENTER.lon, CENTER.lat, top),
+      point: { pixelSize: 12, color: Cesium.Color.fromCssColorString('#ff3b30'), outlineColor: Cesium.Color.WHITE, outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY },
+      label: { text: '합정역 3번출구', font: 'bold 15px "Malgun Gothic", sans-serif', fillColor: Cesium.Color.WHITE,
+        showBackground: true, backgroundColor: Cesium.Color.fromCssColorString('#d9382e'), backgroundPadding: new Cesium.Cartesian2(9, 6),
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -12),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY },
+    }));
+
+    $('b-home').onclick = () => flyTo(VIEWS.home, 1.5);
+    $('b-top').onclick = () => flyTo(VIEWS.top, 1.5);
+    $('b-exit').onclick = () => flyTo(VIEWS.exit, 1.8);
+    $('t-ring').onchange = (e) => { ring.show = e.target.checked; viewer.scene.requestRender(); };
+    $('t-pin').onchange = (e) => { pin.forEach((p) => { p.show = e.target.checked; }); viewer.scene.requestRender(); };
+    $('t-poi').onchange = (e) => { layerVisible('poi_base', e.target.checked); layerVisible('poi_bound', e.target.checked); };
+    $('t-tree').onchange = (e) => layerVisible('bill_tree_v2', e.target.checked);
+    $('t-spin').onchange = (e) => { if (e.target.checked) startSpin(); else stopSpin(); };
+    viewer.canvas.addEventListener('pointerdown', stopSpin);
+
+    // 브이월드의 초기 이동이 끝나면 처음 시점으로 정확히 맞춘다(사용자가 먼저 조작하면 건너뜀).
+    let touched = false;
+    viewer.canvas.addEventListener('pointerdown', () => { touched = true; }, { once: true });
+    viewer.canvas.addEventListener('wheel', () => { touched = true; }, { once: true });
+    const offEnd = viewer.camera.moveEnd.addEventListener(() => { offEnd(); if (!touched) flyTo(VIEWS.home, 1.0); });
+
+    // 건물 타일은 화면이 다시 그려질 때만 처리되므로, 불러오는 동안에는 계속 그리게 한다.
+    const tilesets = () => {
+      const list = [], prims = viewer.scene.primitives;
+      for (let i = 0; i < prims.length; i++) { const p = prims.get(i); if (p instanceof Cesium.Cesium3DTileset && p.show) list.push(p); }
+      return list;
+    };
+    let wasBusy = null;
+    setInterval(() => {
+      let busy = 0;
+      for (const t of tilesets()) busy += t.statistics.numberOfPendingRequests + t.statistics.numberOfTilesProcessing;
+      if (busy) viewer.scene.requestRender();
+      const isBusy = busy > 0;
+      if (isBusy !== wasBusy) {
+        wasBusy = isBusy;
+        setStatus(isBusy ? '건물을 불러오는 중… (처음에는 1분쯤 걸릴 수 있습니다)' : '완료 · 가까이 확대하면 더 세밀한 건물이 불러와집니다.');
+      }
+      window.__busy = busy;
+    }, 120);
+    // 안내판을 숨기면 브이월드 조작 버튼과 아래 로고 줄도 함께 숨긴다.
+    window.__setMapChrome = (hidden) => {
+      try { map.setNavigationZoomVisible(!hidden); map.setLogoVisible(!hidden); } catch (e) { console.warn(e); }
+    };
+    window.__setMapChrome(document.body.classList.contains('panel-hidden'));
+    window.__ready = true;
+    window.__view = { viewer, flyTo, VIEWS, map };
+  }
+
+  const map = new vw.Map();
+  map.setOption({ mapId: 'vmap', initPosition: cameraPositionFor(VIEWS.home), logo: true, navigation: true });
+  vw.ws3dInitCallBack = () => {
+    try { setup(); } catch (e) { console.error(e); setStatus('3D 지도 초기화 중 오류: ' + e.message, true); window.__ready = 'error'; }
+  };
+  try { map.start(); } catch (e) { console.error(e); setStatus('3D 지도를 시작하지 못했습니다: ' + e.message, true); window.__ready = 'error'; }
+})();
+</script>
+<script>
+  // 안내판 숨기기/보이기: ✕ 버튼, ☰ 버튼, 또는 H 키. 선택은 다음에 열 때도 유지된다.
+  (function () {
+    const set = (hidden) => {
+      document.body.classList.toggle('panel-hidden', hidden);
+      if (window.__setMapChrome) window.__setMapChrome(hidden);
+      try { localStorage.setItem('panelHidden', hidden ? '1' : '0'); } catch (e) {}
+    };
+    let saved = '0';
+    try { saved = localStorage.getItem('panelHidden') || '0'; } catch (e) {}
+    set(saved === '1');
+    document.getElementById('panel-close').onclick = () => set(true);
+    document.getElementById('panel-open').onclick = () => set(false);
+    window.addEventListener('keydown', (e) => {
+      if ((e.key === 'h' || e.key === 'H' || e.key === 'ㅗ') && !e.ctrlKey && !e.altKey && !e.metaKey && !(/INPUT|TEXTAREA/.test(e.target.tagName) && e.target.type !== 'checkbox')) set(!document.body.classList.contains('panel-hidden'));
+    });
+  })();
+</script>
+</body>
+</html>
